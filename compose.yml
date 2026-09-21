@@ -1,7 +1,7 @@
 ---
 services:
   db:
-    image: shaikmustafa/arshad:db
+    image: 919484653118.dkr.ecr.ap-southeast-2.amazonaws.com/pythonapp:database
     deploy:
       replicas: 1
     ports:
@@ -10,7 +10,7 @@ services:
       - mynetwork
 
   auth_service:
-    image: shaikmustafa/arshad:auth
+    image: 919484653118.dkr.ecr.ap-southeast-2.amazonaws.com/pythonapp:auth
     deploy:
       replicas: 1
     ports:
@@ -19,10 +19,9 @@ services:
       - mynetwork
     depends_on:
       - db
-    
 
   book_service:
-    image: shaikmustafa/arshad:book
+    image: 919484653118.dkr.ecr.ap-southeast-2.amazonaws.com/pythonapp:book
     deploy:
       replicas: 1
     ports:
@@ -31,8 +30,9 @@ services:
       - mynetwork
     depends_on:
       - db
+
   borrow_service:
-    image: shaikmustafa/arshad:borrow
+    image: 919484653118.dkr.ecr.ap-southeast-2.amazonaws.com/pythonapp:borrow
     deploy:
       replicas: 1
     ports:
@@ -43,7 +43,7 @@ services:
       - db
 
   frontend:
-    image: shaikmustafa/arshad:frontend
+    image: 919484653118.dkr.ecr.ap-southeast-2.amazonaws.com/pythonapp:frontend
     deploy:
       replicas: 1
     ports:
@@ -57,4 +57,4 @@ services:
 
 networks:
   mynetwork:
-    driver: bridge
+    driver: overlay
