@@ -1,0 +1,140 @@
+pipeline {
+
+    agent {
+        node {
+            label 'docker'
+        }
+    }
+
+    environment {
+        AWS_REGION = 'ap-southeast-2'
+        AWS_ACCOUNT_ID = '919484653118'
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REPOSITORY = 'pythonapp'
+    }
+
+    tools {
+        maven 'mymvn'
+    }
+
+    stages {
+
+        stage('code') {
+            steps {
+                git branch: 'master',
+                    url: 'https://github.com/mounika-bochu/python-code-library-app.git'
+            }
+        }
+
+        stage('CQA') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv("mysonar") {
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.projectKey=pythonapp \
+                            -Dsonar.projectName=pythonapp \
+                            -Dsonar.sources=.
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t database:latest ./database
+                    docker build -t auth:latest ./auth
+                    docker build -t book:latest ./book
+                    docker build -t borrow:latest ./borrow
+                    docker build -t frontend:latest .
+                '''
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh '''
+                    trivy image database:latest
+                    trivy image auth:latest
+                    trivy image book:latest
+                    trivy image borrow:latest
+                    trivy image frontend:latest
+                '''
+            }
+        }
+
+        stage('ECR Login') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region $AWS_REGION | \
+                    docker login --username AWS --password-stdin $ECR_REGISTRY
+                '''
+            }
+        }
+
+        stage('Tag') {
+            steps {
+                sh '''
+                    docker tag database:latest $ECR_REGISTRY/$ECR_REPOSITORY:database
+                    docker tag auth:latest $ECR_REGISTRY/$ECR_REPOSITORY:auth
+                    docker tag book:latest $ECR_REGISTRY/$ECR_REPOSITORY:book
+                    docker tag borrow:latest $ECR_REGISTRY/$ECR_REPOSITORY:borrow
+                    docker tag frontend:latest $ECR_REGISTRY/$ECR_REPOSITORY:frontend
+                '''
+            }
+        }
+
+        stage('Push') {
+            steps {
+                sh '''
+                    docker push $ECR_REGISTRY/$ECR_REPOSITORY:database
+                    docker push $ECR_REGISTRY/$ECR_REPOSITORY:auth
+                    docker push $ECR_REGISTRY/$ECR_REPOSITORY:book
+                    docker push $ECR_REGISTRY/$ECR_REPOSITORY:borrow
+                    docker push $ECR_REGISTRY/$ECR_REPOSITORY:frontend
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    docker stack deploy -c compose.yml pythonapp
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            emailext(
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <h2>Build Successful</h2>
+                    <p>Job: ${env.JOB_NAME}</p>
+                    <p>Build: ${env.BUILD_NUMBER}</p>
+                    <p>Build URL: ${env.BUILD_URL}</p>
+                """,
+                to: "YOUR_EMAIL@gmail.com"
+            )
+        }
+
+        failure {
+            emailext(
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <h2>Build Failed</h2>
+                    <p>Job: ${env.JOB_NAME}</p>
+                    <p>Build: ${env.BUILD_NUMBER}</p>
+                    <p>Build URL: ${env.BUILD_URL}</p>
+                """,
+                to: "YOUR_EMAIL@gmail.com"
+            )
+        }
+    }
+}
